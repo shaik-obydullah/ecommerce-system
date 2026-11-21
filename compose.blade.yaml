@@ -1,0 +1,4 @@
+services:
+  edge:
+    volumes:
+      - ./docker/edge/Caddyfile.blade:/etc/caddy/Caddyfile:ro

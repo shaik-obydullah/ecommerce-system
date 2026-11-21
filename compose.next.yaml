@@ -1,0 +1,23 @@
+services:
+  edge:
+    volumes:
+      - ./docker/edge/Caddyfile.next:/etc/caddy/Caddyfile:ro
+
+  next:
+    build:
+      context: .
+      dockerfile: docker/next/Dockerfile
+      target: prod
+    environment:
+      INTERNAL_API_URL: http://web
+      NEXT_PUBLIC_API_URL: ${APP_URL:-http://localhost:8080}
+      PORT: "3000"
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

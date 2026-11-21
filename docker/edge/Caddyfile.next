@@ -1,0 +1,24 @@
+{
+    auto_https off
+    admin off
+}
+
+:80 {
+    encode zstd gzip
+
+    header {
+        -Server
+    }
+
+    # Core owns the API, admin, Livewire, storage, health, Sanctum, Horizon,
+    # and API documentation endpoints.
+    @core path /api/* /admin* /livewire/* /storage/* /up /sanctum/* /horizon* /docs*
+    handle @core {
+        reverse_proxy web:80
+    }
+
+    # Everything else is the Next.js storefront.
+    handle {
+        reverse_proxy next:3000
+    }
+}

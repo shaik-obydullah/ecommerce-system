@@ -1,0 +1,15 @@
+{
+    auto_https off
+    admin off
+}
+
+:80 {
+    encode zstd gzip
+
+    header {
+        -Server
+    }
+
+    # Blade mode: the core serves every route.
+    reverse_proxy web:80
+}

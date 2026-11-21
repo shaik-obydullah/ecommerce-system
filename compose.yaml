@@ -1,0 +1,156 @@
+name: ${COMPOSE_PROJECT_NAME:-ecommerce}
+
+# Shared service definition for every container that runs the Laravel core.
+x-core-build: &core-build
+  context: .
+  dockerfile: docker/core/Dockerfile
+  target: prod
+
+x-core-environment: &core-environment
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_DATABASE: ${DB_DATABASE:-ecommerce}
+  DB_USERNAME: ${DB_USERNAME:-ecommerce}
+  DB_PASSWORD: ${DB_PASSWORD:-secret}
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: "null"
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: redis
+  APP_URL: ${APP_URL:-http://localhost:8080}
+  STOREFRONT_MODE: ${STOREFRONT_MODE:-blade}
+
+x-core-service: &core-service
+  build: *core-build
+  env_file:
+    - ./apps/core/.env
+  environment: *core-environment
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-ecommerce}
+      POSTGRES_USER: ${DB_USERNAME:-ecommerce}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      # PostgreSQL 18+ keeps major-version-specific data directories, so mount
+      # the parent directory rather than /var/lib/postgresql/data.
+      - postgres_data:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${DB_USERNAME:-ecommerce} -d ${DB_DATABASE:-ecommerce}
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # One-shot schema/seed job. Every runtime service waits for it to finish.
+  migrate:
+    <<: *core-service
+    command: ["php", "artisan", "migrate", "--force", "--seed"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  core:
+    <<: *core-service
+    command: ["php-fpm"]
+    volumes:
+      - storage_data:/var/www/html/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  queue:
+    <<: *core-service
+    command: ["php", "artisan", "horizon"]
+    volumes:
+      - storage_data:/var/www/html/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan horizon:status >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  scheduler:
+    <<: *core-service
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - storage_data:/var/www/html/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan schedule:list >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/core/Dockerfile
+      target: nginx
+    depends_on:
+      core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/up >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  edge:
+    image: caddy:2-alpine
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/up >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  storage_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,60 @@
+# Production overlay: no bind mounts, hardened runtime settings, port 80 by default.
+x-prod-environment: &prod-environment
+  APP_ENV: production
+  APP_DEBUG: "false"
+  LOG_CHANNEL: stderr
+
+services:
+  postgres:
+    restart: always
+
+  redis:
+    restart: always
+
+  migrate:
+    environment:
+      <<: *prod-environment
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_DATABASE: ${DB_DATABASE:-ecommerce}
+      DB_USERNAME: ${DB_USERNAME:-ecommerce}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+
+  core:
+    environment:
+      <<: *prod-environment
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_DATABASE: ${DB_DATABASE:-ecommerce}
+      DB_USERNAME: ${DB_USERNAME:-ecommerce}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+    restart: always
+
+  queue:
+    environment:
+      <<: *prod-environment
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_DATABASE: ${DB_DATABASE:-ecommerce}
+      DB_USERNAME: ${DB_USERNAME:-ecommerce}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+    restart: always
+
+  scheduler:
+    environment:
+      <<: *prod-environment
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_DATABASE: ${DB_DATABASE:-ecommerce}
+      DB_USERNAME: ${DB_USERNAME:-ecommerce}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+    restart: always
+
+  edge:
+    ports: !reset
+      - "${APP_PORT:-80}:80"
+    restart: always

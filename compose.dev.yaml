@@ -1,0 +1,87 @@
+# Development overlay: bind-mounted source, dev dependencies, exposed infra ports.
+x-dev-build: &dev-build
+  context: .
+  dockerfile: docker/core/Dockerfile
+  target: dev
+
+x-dev-volumes: &dev-volumes
+  - ./apps/core:/var/www/html
+  - core_vendor:/var/www/html/vendor
+  - core_storage:/var/www/html/storage
+  - core_bootstrap_cache:/var/www/html/bootstrap/cache
+
+x-dev-environment: &dev-environment
+  APP_ENV: local
+  APP_DEBUG: "true"
+
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  migrate:
+    image: ecommerce-core:dev
+    build: *dev-build
+    volumes: *dev-volumes
+    environment:
+      <<: *dev-environment
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_DATABASE: ${DB_DATABASE:-ecommerce}
+      DB_USERNAME: ${DB_USERNAME:-ecommerce}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+
+  core:
+    image: ecommerce-core:dev
+    build: *dev-build
+    volumes: *dev-volumes
+    environment:
+      <<: *dev-environment
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_DATABASE: ${DB_DATABASE:-ecommerce}
+      DB_USERNAME: ${DB_USERNAME:-ecommerce}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+
+  queue:
+    image: ecommerce-core:dev
+    build: *dev-build
+    volumes: *dev-volumes
+    environment:
+      <<: *dev-environment
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_DATABASE: ${DB_DATABASE:-ecommerce}
+      DB_USERNAME: ${DB_USERNAME:-ecommerce}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+
+  scheduler:
+    image: ecommerce-core:dev
+    build: *dev-build
+    volumes: *dev-volumes
+    environment:
+      <<: *dev-environment
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_DATABASE: ${DB_DATABASE:-ecommerce}
+      DB_USERNAME: ${DB_USERNAME:-ecommerce}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+
+  web:
+    image: ecommerce-web:dev
+    volumes:
+      - ./apps/core/public:/var/www/html/public:ro
+      - ./docker/core/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  core_vendor:
+  core_storage:
+  core_bootstrap_cache:

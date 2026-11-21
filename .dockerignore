@@ -1,0 +1,16 @@
+.git
+.github
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/vendor
+apps/core/bootstrap/cache
+apps/core/storage
+apps/core/public/build
+apps/core/public/storage
+apps/core/database/database.sqlite
+docs
+compose*.yaml
+Makefile
+README.md
